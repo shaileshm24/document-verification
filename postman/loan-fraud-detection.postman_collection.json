@@ -1,0 +1,373 @@
+{
+  "info": {
+    "name": "Loan Fraud Detection API",
+    "description": "AI-powered loan document verification — Aadhaar QR + EXIF forensics + Claude Vision extraction + cross-document checks.\n\n**Setup:**\n1. Start backend (`npm run dev` in `/backend`)\n2. Import this collection\n3. Pick the `Local` environment OR set the `baseUrl` collection variable\n4. Run requests in order from the `Demo Flow` folder\n\nThe `loanId` and `flagId` variables auto-populate from prior responses (test scripts at the bottom of each request).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "lfd-collection-2026"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3001", "type": "string" },
+    { "key": "officerId", "value": "OFFICER-001", "type": "string" },
+    { "key": "loanId", "value": "", "type": "string" },
+    { "key": "flagId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Demo Flow (run in order)",
+      "item": [
+        {
+          "name": "1. Create loan application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('201 Created', () => pm.expect(pm.response.code).to.eql(201));",
+                  "pm.test('has id', () => pm.expect(json.id).to.be.a('string'));",
+                  "pm.collectionVariables.set('loanId', json.id);",
+                  "console.log('loanId set →', json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-officer-id", "value": "{{officerId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"applicantName\": \"Rajesh Kumar\",\n  \"applicantEmail\": \"rajesh.kumar@example.com\",\n  \"applicantPhone\": \"9876543210\",\n  \"loanAmountRequested\": 500000,\n  \"loanType\": \"PERSONAL\",\n  \"branchCode\": \"MUM-001\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/loans", "host": ["{{baseUrl}}"], "path": ["api", "loans"] }
+          }
+        },
+        {
+          "name": "2. Upload documents (Aadhaar + PAN + ITR + Employment)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted', () => pm.expect(pm.response.code).to.eql(202));",
+                  "const j = pm.response.json();",
+                  "pm.test('analysis queued', () => pm.expect(j.success).to.eql(true));",
+                  "console.log('Job:', j.jobId, '| Subscribe via Socket.io to', j.websocketEvent);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "x-officer-id", "value": "{{officerId}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "aadhaar", "type": "file", "src": [] },
+                { "key": "pan", "type": "file", "src": [] },
+                { "key": "itr", "type": "file", "src": [] },
+                { "key": "employmentLetter", "type": "file", "src": [] }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "{{loanId}}", "documents"]
+            },
+            "description": "Attach each file in the form-data fields. PAN, ITR and employmentLetter are optional but recommended for the full cross-check demo. Allowed types: JPEG, PNG, WebP, PDF. Max 10 MB per file."
+          }
+        },
+        {
+          "name": "3. Poll analysis status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "console.log('status =', j.status, '| riskScore =', j.riskScore, '| recommendation =', j.recommendation);",
+                  "pm.test('analysis exists', () => pm.expect(j).to.have.property('status'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}/documents/analysis",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "{{loanId}}", "documents", "analysis"]
+            },
+            "description": "Re-run every few seconds until `status` is `COMPLETED` (or `FAILED`). The response carries the full document-by-document result including `qrVerification` and `exifAnalysis` for the Aadhaar."
+          }
+        },
+        {
+          "name": "4. Get full loan detail (after analysis)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "{{loanId}}"]
+            }
+          }
+        },
+        {
+          "name": "5. Officer decision — APPROVE",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-officer-id", "value": "{{officerId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"reason\": \"All verifications passed: QR match, EXIF clean, cross-docs consistent\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}/decision",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "{{loanId}}", "decision"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Loans",
+      "item": [
+        {
+          "name": "POST /api/loans — create",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-officer-id", "value": "{{officerId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"applicantName\": \"Priya Patel\",\n  \"applicantEmail\": \"priya@example.com\",\n  \"applicantPhone\": \"9123456789\",\n  \"loanAmountRequested\": 800000,\n  \"loanType\": \"HOME\",\n  \"branchCode\": \"MUM-002\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/loans", "host": ["{{baseUrl}}"], "path": ["api", "loans"] },
+            "description": "loanType: PERSONAL | HOME | VEHICLE | BUSINESS | EDUCATION | GOLD"
+          }
+        },
+        {
+          "name": "GET /api/loans — list (paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "PENDING", "disabled": true, "description": "Optional filter: PENDING | UNDER_REVIEW | APPROVED | REJECTED | DISBURSED | CLOSED" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/loans/:id — detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "{{loanId}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/loans/:id/decision — APPROVE",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-officer-id", "value": "{{officerId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"reason\": \"Clean profile, low risk\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}/decision",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "{{loanId}}", "decision"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/loans/:id/decision — REJECT",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-officer-id", "value": "{{officerId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"REJECTED\",\n  \"reason\": \"Aadhaar QR mismatch + EXIF shows Photoshop\",\n  \"overrideReason\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}/decision",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "{{loanId}}", "decision"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/loans/:id/decision — ESCALATE",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-officer-id", "value": "{{officerId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"ESCALATED\",\n  \"reason\": \"Cross-document name mismatch — needs manual KYC\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}/decision",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "{{loanId}}", "decision"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "POST /api/loans/:loanId/documents — upload",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "x-officer-id", "value": "{{officerId}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "aadhaar", "type": "file", "src": [], "description": "Aadhaar card image (JPEG/PNG/WebP)" },
+                { "key": "pan", "type": "file", "src": [], "description": "PAN card image (JPEG/PNG/WebP)" },
+                { "key": "itr", "type": "file", "src": [], "description": "ITR document (PDF, can attach up to 2)" },
+                { "key": "employmentLetter", "type": "file", "src": [], "description": "Employment letter (PDF)" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "{{loanId}}", "documents"]
+            },
+            "description": "Returns 202 Accepted with a Bull jobId. The worker runs Claude OCR + Aadhaar QR decode + EXIF forensics + cross-document checks asynchronously. Subscribe to `loan:<id>` via Socket.io for live progress."
+          }
+        },
+        {
+          "name": "GET /api/loans/:loanId/documents/analysis — latest result",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId}}/documents/analysis",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "{{loanId}}", "documents", "analysis"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fraud",
+      "item": [
+        {
+          "name": "GET /api/fraud/flags",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.flags && j.flags.length > 0) {",
+                  "  pm.collectionVariables.set('flagId', j.flags[0].id);",
+                  "  console.log('flagId set →', j.flags[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/fraud/flags?resolved=false&page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "fraud", "flags"],
+              "query": [
+                { "key": "resolved", "value": "false", "description": "true | false (omit for all)" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/fraud/flags/:id/resolve",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "x-officer-id", "value": "{{officerId}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/fraud/flags/{{flagId}}/resolve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "fraud", "flags", "{{flagId}}", "resolve"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/fraud/summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/fraud/summary", "host": ["{{baseUrl}}"], "path": ["api", "fraud", "summary"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stats",
+      "item": [
+        {
+          "name": "GET /api/stats/dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/stats/dashboard", "host": ["{{baseUrl}}"], "path": ["api", "stats", "dashboard"] }
+          }
+        }
+      ]
+    }
+  ]
+}

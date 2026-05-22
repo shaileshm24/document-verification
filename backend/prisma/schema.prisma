@@ -1,0 +1,154 @@
+datasource db {
+  provider = "postgresql"
+  
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+}
+
+
+
+// ─── LOAN APPLICATIONS ───────────────────────────────
+model LoanApplication {
+  id                    String   @id @default(uuid())
+  applicationNumber     String   @unique @default(cuid())
+  applicantName         String
+  applicantEmail        String?
+  applicantPhone        String
+  loanAmountRequested   Float
+  loanType              LoanType @default(PERSONAL)
+  status                LoanStatus @default(PENDING)
+  analysisStatus        AnalysisStatus @default(NOT_STARTED)
+  analysisStartedAt     DateTime?
+  analysisCompletedAt   DateTime?
+  analysisError         String?
+  documentsUploadedAt   DateTime?
+  currentRiskScore      Int?
+  recommendation        String?
+  officerId             String?
+  branchCode            String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  documents             Document[]
+  analysis              DocumentAnalysis[]
+  fraudFlags            FraudFlag[]
+  complianceReports     ComplianceReport[]
+  decision              LoanDecision?
+}
+
+// ─── UPLOADED DOCUMENTS ──────────────────────────────
+model Document {
+  id                    String   @id @default(uuid())
+  loanApplicationId     String
+  type                  DocumentType
+  s3Key                 String
+  s3Url                 String
+  originalFilename      String
+  mimeType              String
+  sizeBytes             Int
+  uploadedBy            String
+  analysisStatus        String   @default("PENDING")
+  createdAt             DateTime @default(now())
+
+  loanApplication       LoanApplication @relation(fields: [loanApplicationId], references: [id])
+}
+
+// ─── AI ANALYSIS RESULTS ─────────────────────────────
+model DocumentAnalysis {
+  id                    String   @id @default(uuid())
+  loanApplicationId     String
+  riskScore             Int
+  recommendation        String   // APPROVE | MANUAL_REVIEW | REJECT
+  riskLevel             String   // LOW | MEDIUM | HIGH
+  processingTimeMs      Int
+  documentsResult       Json     // Full extraction results per doc
+  crossChecks           Json     // Cross-document validation results
+  riskFactors           Json     // Weighted risk factor breakdown
+  analyzedAt            DateTime
+  createdAt             DateTime @default(now())
+
+  loanApplication       LoanApplication @relation(fields: [loanApplicationId], references: [id])
+}
+
+// ─── FRAUD FLAGS ─────────────────────────────────────
+model FraudFlag {
+  id                    String   @id @default(uuid())
+  loanApplicationId     String
+  riskScore             Int
+  flaggedBy             String   // AI_SYSTEM | OFFICER_ID
+  reasons               String[]
+  resolved              Boolean  @default(false)
+  resolvedBy            String?
+  resolvedAt            DateTime?
+  createdAt             DateTime @default(now())
+
+  loanApplication       LoanApplication @relation(fields: [loanApplicationId], references: [id])
+}
+
+// ─── OFFICER DECISIONS ───────────────────────────────
+model LoanDecision {
+  id                    String   @id @default(uuid())
+  loanApplicationId     String   @unique
+  officerId             String
+  decision              String   // APPROVED | REJECTED | ESCALATED
+  reason                String?
+  overrideReason        String?  // If overriding AI recommendation
+  decidedAt             DateTime @default(now())
+
+  loanApplication       LoanApplication @relation(fields: [loanApplicationId], references: [id])
+}
+
+// ─── COMPLIANCE REPORTS ───────────────────────────────
+model ComplianceReport {
+  id                    String   @id @default(uuid())
+  loanApplicationId     String
+  reportType            String   // RBI_FIU_AUTO | MANUAL | INTERNAL
+  riskScore             Int
+  reportedAt            DateTime
+  status                String   // SUBMITTED | ACKNOWLEDGED | ACTIONED
+  referenceNumber       String?
+  createdAt             DateTime @default(now())
+
+  loanApplication       LoanApplication @relation(fields: [loanApplicationId], references: [id])
+}
+
+// ─── ENUMS ───────────────────────────────────────────
+enum LoanType {
+  PERSONAL
+  HOME
+  VEHICLE
+  BUSINESS
+  EDUCATION
+  GOLD
+}
+
+enum LoanStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  DISBURSED
+  CLOSED
+}
+
+enum AnalysisStatus {
+  NOT_STARTED
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum DocumentType {
+  AADHAAR
+  PAN
+  ITR
+  EMPLOYMENT_LETTER
+  SALARY_SLIP
+  BANK_STATEMENT
+  FORM_16
+  PROPERTY_DOCS
+}

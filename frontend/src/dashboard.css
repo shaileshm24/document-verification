@@ -1,0 +1,430 @@
+/* frontend/src/dashboard.css — Document Verification Dashboard */
+
+:root {
+  --c-bg:        #f7f7f8;
+  --c-panel:     #ffffff;
+  --c-panel-2:   #fafafa;
+  --c-border:    #e5e7eb;
+  --c-border-2:  #d1d5db;
+  --c-text:      #111827;
+  --c-text-2:    #4b5563;
+  --c-text-3:    #6b7280;
+  --c-text-4:    #9ca3af;
+  --c-accent:    #2563eb;
+  --c-accent-bg: #eff6ff;
+
+  --c-pass:      #16a34a;
+  --c-pass-bg:   #f0fdf4;
+  --c-pass-bd:   #86efac;
+
+  --c-warn:      #d97706;
+  --c-warn-bg:   #fffbeb;
+  --c-warn-bd:   #fcd34d;
+
+  --c-fail:      #dc2626;
+  --c-fail-bg:   #fef2f2;
+  --c-fail-bd:   #fca5a5;
+
+  --radius:      10px;
+  --radius-sm:   6px;
+  --shadow:      0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.lfd-app {
+  min-height: 100vh;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 24px 32px;
+}
+
+.lfd-container { max-width: 1280px; margin: 0 auto; }
+
+/* ─── Header ─────────────────────────────────────── */
+.lfd-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 24px; padding-bottom: 18px; margin-bottom: 24px;
+  border-bottom: 1px solid var(--c-border);
+}
+.lfd-header h1 { margin: 0; font-size: 22px; font-weight: 600; }
+.lfd-header .sub { margin-top: 4px; color: var(--c-text-3); font-size: 13px; }
+.lfd-header .sub code {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 12px;
+}
+
+/* ─── Hero (risk gauge + recommendation) ─────────── */
+.lfd-hero {
+  display: grid; grid-template-columns: 280px 1fr; gap: 24px;
+  background: var(--c-panel); border: 1px solid var(--c-border);
+  border-radius: var(--radius); padding: 24px; margin-bottom: 24px;
+  box-shadow: var(--shadow);
+}
+.lfd-hero-meta { display: flex; flex-direction: column; gap: 16px; }
+.lfd-reco-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 16px; border-radius: 999px;
+  font-weight: 600; font-size: 13px; letter-spacing: 0.02em;
+  align-self: flex-start;
+}
+.lfd-reco-badge.approve  { background: var(--c-pass-bg); color: var(--c-pass); border: 1px solid var(--c-pass-bd); }
+.lfd-reco-badge.review   { background: var(--c-warn-bg); color: var(--c-warn); border: 1px solid var(--c-warn-bd); }
+.lfd-reco-badge.reject   { background: var(--c-fail-bg); color: var(--c-fail); border: 1px solid var(--c-fail-bd); }
+
+.lfd-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.lfd-stat {
+  background: var(--c-panel-2); border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm); padding: 12px;
+}
+.lfd-stat .k { font-size: 11px; color: var(--c-text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+.lfd-stat .v { font-size: 20px; font-weight: 600; margin-top: 4px; color: var(--c-text); }
+.lfd-stat .v.pass { color: var(--c-pass); }
+.lfd-stat .v.fail { color: var(--c-fail); }
+.lfd-stat .v.warn { color: var(--c-warn); }
+.lfd-stat .h { font-size: 11px; color: var(--c-text-4); margin-top: 2px; }
+
+/* ─── Panel ──────────────────────────────────────── */
+.lfd-panel {
+  background: var(--c-panel); border: 1px solid var(--c-border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+.lfd-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+.lfd-panel-head h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--c-text); }
+.lfd-panel-head .meta { font-size: 12px; color: var(--c-text-3); }
+
+/* ─── Risk breakdown ─────────────────────────────── */
+.lfd-rb-bar {
+  display: flex; height: 28px; border-radius: 6px; overflow: hidden;
+  border: 1px solid var(--c-border); background: #f3f4f6;
+}
+.lfd-rb-seg { display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: 600; }
+.lfd-rb-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 14px; }
+.lfd-rb-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: var(--radius-sm);
+  background: var(--c-panel-2); border: 1px solid var(--c-border);
+  font-size: 12px;
+}
+.lfd-rb-item .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.lfd-rb-item .lbl { flex: 1; color: var(--c-text-2); }
+.lfd-rb-item .pts { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 600; color: var(--c-text); }
+
+/* ─── Document cards ─────────────────────────────── */
+.lfd-doc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
+.lfd-doc {
+  background: var(--c-panel); border: 1px solid var(--c-border);
+  border-radius: var(--radius); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.lfd-doc.clean   { border-top: 3px solid var(--c-pass); }
+.lfd-doc.warn    { border-top: 3px solid var(--c-warn); }
+.lfd-doc.fail    { border-top: 3px solid var(--c-fail); }
+.lfd-doc.error   { border-top: 3px solid var(--c-text-4); }
+
+.lfd-doc-head {
+  display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+  border-bottom: 1px solid var(--c-border);
+}
+.lfd-doc-head .icon { font-size: 20px; }
+.lfd-doc-head .title { flex: 1; }
+.lfd-doc-head .title .name { font-weight: 600; font-size: 14px; color: var(--c-text); }
+.lfd-doc-head .title .mime { font-size: 11px; color: var(--c-text-4); margin-top: 2px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.lfd-doc-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+
+.lfd-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+}
+.lfd-pill.pass { background: var(--c-pass-bg); color: var(--c-pass); border: 1px solid var(--c-pass-bd); }
+.lfd-pill.warn { background: var(--c-warn-bg); color: var(--c-warn); border: 1px solid var(--c-warn-bd); }
+.lfd-pill.fail { background: var(--c-fail-bg); color: var(--c-fail); border: 1px solid var(--c-fail-bd); }
+.lfd-pill.muted { background: #f3f4f6; color: var(--c-text-3); border: 1px solid var(--c-border); }
+
+.lfd-section {
+  border-top: 1px dashed var(--c-border);
+  padding-top: 12px; margin-top: 2px;
+}
+.lfd-section:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+.lfd-section-title,
+.lfd-section-title-inline {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--c-text-3); margin-bottom: 8px;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.lfd-section-title { display: flex; }
+.lfd-section-meta {
+  font-size: 10.5px; font-weight: 500; text-transform: none; letter-spacing: 0;
+  color: var(--c-text-4, #9ca3af);
+}
+
+/* Collapsible raw OCR response */
+.lfd-ocr-raw summary {
+  cursor: pointer; list-style: none; user-select: none;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 0;
+}
+.lfd-ocr-raw summary::-webkit-details-marker { display: none; }
+.lfd-ocr-raw summary::before {
+  content: '▸'; margin-right: 6px; color: var(--c-text-4, #9ca3af);
+  transition: transform 0.15s; display: inline-block;
+}
+.lfd-ocr-raw[open] summary::before { transform: rotate(90deg); }
+.lfd-ocr-raw summary:hover .lfd-section-title-inline { color: var(--c-text-2); }
+
+.lfd-json {
+  margin: 8px 0 0; padding: 10px 12px;
+  background: var(--c-bg-2, #f9fafb); border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm, 6px);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px; line-height: 1.5; color: var(--c-text-2);
+  max-height: 360px; overflow: auto; white-space: pre;
+}
+
+.lfd-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12px; }
+.lfd-fields .k { color: var(--c-text-3); }
+.lfd-fields .v { color: var(--c-text); font-weight: 500; word-break: break-word; text-align: right; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; }
+
+.lfd-auth-bar { display: flex; align-items: center; gap: 8px; }
+.lfd-auth-bar .track { flex: 1; height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+.lfd-auth-bar .fill { height: 100%; transition: width .4s ease; }
+.lfd-auth-bar .val { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; font-weight: 600; min-width: 38px; text-align: right; }
+
+.lfd-flag-list { display: flex; flex-direction: column; gap: 6px; }
+.lfd-flag {
+  display: flex; align-items: flex-start; gap: 8px; font-size: 12px;
+  padding: 6px 10px; border-radius: 6px; background: var(--c-fail-bg); color: var(--c-fail);
+  border-left: 3px solid var(--c-fail);
+}
+.lfd-flag.warn { background: var(--c-warn-bg); color: var(--c-warn); border-left-color: var(--c-warn); }
+.lfd-flag .code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; opacity: 0.7; }
+
+.lfd-note {
+  font-size: 12px; line-height: 1.6; color: var(--c-text-2);
+  background: var(--c-panel-2); border-left: 3px solid var(--c-border-2);
+  padding: 8px 12px; border-radius: 4px;
+}
+
+/* ─── Cross checks ───────────────────────────────── */
+.lfd-cx-list { display: flex; flex-direction: column; gap: 8px; }
+.lfd-cx {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border); background: var(--c-panel-2);
+}
+.lfd-cx.pass { background: var(--c-pass-bg); border-color: var(--c-pass-bd); }
+.lfd-cx.fail { background: var(--c-fail-bg); border-color: var(--c-fail-bd); }
+.lfd-cx .icon { font-size: 16px; flex: none; margin-top: 1px; }
+.lfd-cx .body { flex: 1; }
+.lfd-cx .label { font-weight: 600; font-size: 13px; color: var(--c-text); }
+.lfd-cx .detail { font-size: 12px; color: var(--c-text-2); margin-top: 2px; line-height: 1.5; }
+
+/* ─── Upload panel ───────────────────────────────── */
+.lfd-upload-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.lfd-drop {
+  border: 1.5px dashed var(--c-border-2); border-radius: var(--radius-sm);
+  padding: 18px 14px; text-align: center; cursor: pointer;
+  background: var(--c-panel-2); transition: all 0.15s;
+}
+.lfd-drop:hover { border-color: var(--c-accent); background: var(--c-accent-bg); }
+.lfd-drop.has-file { border-color: var(--c-pass); background: var(--c-pass-bg); border-style: solid; }
+.lfd-drop.drag-active { border-color: var(--c-accent); background: var(--c-accent-bg); }
+.lfd-drop .icon { font-size: 22px; margin-bottom: 6px; }
+.lfd-drop .label { font-size: 13px; font-weight: 600; color: var(--c-text); }
+.lfd-drop .hint { font-size: 11px; color: var(--c-text-3); margin-top: 4px; }
+.lfd-drop .file { font-size: 11px; color: var(--c-pass); margin-top: 4px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+.lfd-btn {
+  width: 100%; padding: 12px 20px; border: none;
+  background: var(--c-accent); color: white; font-weight: 600; font-size: 14px;
+  border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s;
+  margin-top: 16px;
+}
+.lfd-btn:hover { background: #1d4ed8; }
+.lfd-btn:disabled { background: var(--c-text-4); cursor: not-allowed; }
+.lfd-btn.ghost { background: transparent; color: var(--c-text); border: 1px solid var(--c-border-2); }
+
+.lfd-progress {
+  height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden;
+  margin-top: 12px;
+}
+.lfd-progress .bar { height: 100%; background: var(--c-accent); transition: width 0.3s; }
+.lfd-progress-label { font-size: 11px; color: var(--c-text-3); margin-top: 6px; text-align: center; }
+
+.lfd-error-banner {
+  background: var(--c-fail-bg); color: var(--c-fail);
+  border: 1px solid var(--c-fail-bd); border-radius: var(--radius-sm);
+  padding: 10px 14px; font-size: 12px; margin-top: 12px;
+}
+
+/* ─── Decision row ───────────────────────────────── */
+.lfd-decision { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.lfd-decision button {
+  padding: 14px 20px; font-weight: 600; font-size: 14px;
+  border-radius: var(--radius-sm); border: 1px solid; cursor: pointer; transition: all 0.15s;
+}
+.lfd-decision .approve  { background: var(--c-pass-bg); color: var(--c-pass); border-color: var(--c-pass-bd); }
+.lfd-decision .escalate { background: var(--c-warn-bg); color: var(--c-warn); border-color: var(--c-warn-bd); }
+.lfd-decision .reject   { background: var(--c-fail-bg); color: var(--c-fail); border-color: var(--c-fail-bd); }
+.lfd-decision button:hover { filter: brightness(0.97); }
+
+/* ─── Document preview (thumbnail) ───────────────── */
+.lfd-doc-preview {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 14px; border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel-2);
+}
+.lfd-doc-preview .thumb {
+  flex: none; width: 88px; height: 88px; border-radius: var(--radius-sm);
+  overflow: hidden; border: 1px solid var(--c-border);
+  background: #fff; display: flex; align-items: center; justify-content: center;
+  text-decoration: none;
+}
+.lfd-doc-preview .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lfd-doc-preview .thumb.pdf {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  color: var(--c-fail); font-size: 12px; font-weight: 600;
+}
+.lfd-doc-preview .meta { flex: 1; min-width: 0; }
+.lfd-doc-preview .filename {
+  font-size: 12px; font-weight: 600; color: var(--c-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lfd-doc-preview .sub { font-size: 11px; color: var(--c-text-3); margin-top: 4px; }
+.lfd-doc-preview .sub a { color: var(--c-accent); text-decoration: none; }
+.lfd-doc-preview .sub a:hover { text-decoration: underline; }
+
+/* ─── Raw analysis drawer ────────────────────────── */
+.lfd-raw {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px; line-height: 1.55;
+  background: #0f172a; color: #e2e8f0;
+  border-radius: var(--radius-sm); padding: 16px;
+  max-height: 480px; overflow: auto; white-space: pre;
+}
+.lfd-raw-toolbar {
+  display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 8px;
+}
+.lfd-raw-toolbar button {
+  font-size: 11px; padding: 4px 10px; border-radius: 4px;
+  background: var(--c-panel-2); border: 1px solid var(--c-border);
+  color: var(--c-text-2); cursor: pointer;
+}
+.lfd-raw-toolbar button:hover { background: var(--c-accent-bg); color: var(--c-accent); }
+
+/* ─── Upload summary (collapsed state) ───────────── */
+.lfd-upload-summary {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 4px 0;
+}
+.lfd-upload-summary .files {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.lfd-upload-summary .files .chip {
+  font-size: 11px; padding: 3px 9px; border-radius: 10px;
+  background: var(--c-pass-bg); color: var(--c-pass);
+  border: 1px solid var(--c-pass-bd);
+}
+.lfd-upload-summary button {
+  font-size: 12px; padding: 6px 12px; border-radius: var(--radius-sm);
+  background: transparent; border: 1px solid var(--c-border-2);
+  color: var(--c-text-2); cursor: pointer; flex: none;
+}
+.lfd-upload-summary button:hover { background: var(--c-accent-bg); color: var(--c-accent); border-color: var(--c-accent); }
+
+/* ─── Empty/idle state ───────────────────────────── */
+.lfd-empty { text-align: center; padding: 48px 20px; color: var(--c-text-3); }
+.lfd-empty .icon { font-size: 56px; opacity: 0.45; margin-bottom: 12px; }
+.lfd-empty h3 { margin: 0 0 6px; color: var(--c-text); font-size: 16px; }
+.lfd-empty p { margin: 0; font-size: 13px; }
+
+/* ─── Loan list table ────────────────────────────── */
+.lfd-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.lfd-table thead th {
+  text-align: left; font-size: 11px; font-weight: 600;
+  color: var(--c-text-3); text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 10px 12px; border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg-2, #fafafa);
+}
+.lfd-table tbody td {
+  padding: 12px; border-bottom: 1px solid var(--c-border);
+  color: var(--c-text-2); vertical-align: middle;
+}
+.lfd-table tbody tr.clickable { cursor: pointer; transition: background 0.12s; }
+.lfd-table tbody tr.clickable:hover { background: var(--c-accent-bg, #f4f7ff); }
+.lfd-table .strong { font-weight: 600; color: var(--c-text); }
+.lfd-table .sub-cell { color: var(--c-text-3); font-size: 11.5px; }
+.lfd-table code {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11.5px; color: var(--c-text);
+  background: var(--c-bg-2, #f3f4f6); padding: 2px 6px; border-radius: 4px;
+}
+
+/* ─── Back link in dashboard header ──────────────── */
+.lfd-back-link {
+  background: none; border: none; padding: 0; margin: 0 0 6px;
+  font-size: 12px; color: var(--c-accent, #2563eb); cursor: pointer;
+  font-family: inherit; font-weight: 500;
+}
+.lfd-back-link:hover { text-decoration: underline; }
+
+/* ─── Modal (create loan) ────────────────────────── */
+.lfd-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100; padding: 16px;
+}
+.lfd-modal {
+  background: #fff; border-radius: var(--radius-md, 10px);
+  width: 100%; max-width: 520px; max-height: 90vh; overflow: auto;
+  padding: 22px 24px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+.lfd-modal-close {
+  background: none; border: none; font-size: 22px; line-height: 1;
+  color: var(--c-text-3); cursor: pointer; padding: 4px 8px;
+}
+.lfd-modal-close:hover { color: var(--c-text); }
+.lfd-modal-actions {
+  display: flex; justify-content: flex-end; gap: 10px;
+  margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--c-border);
+}
+
+/* ─── Form fields ────────────────────────────────── */
+.lfd-form { display: grid; gap: 14px; }
+.lfd-field { display: grid; gap: 5px; }
+.lfd-field > span {
+  font-size: 12px; font-weight: 500; color: var(--c-text-2);
+}
+.lfd-field input,
+.lfd-field select {
+  width: 100%; padding: 8px 10px; box-sizing: border-box;
+  border: 1px solid var(--c-border-2, #d1d5db); border-radius: var(--radius-sm, 6px);
+  font-size: 13px; font-family: inherit; background: #fff; color: var(--c-text);
+}
+.lfd-field input:focus,
+.lfd-field select:focus {
+  outline: none; border-color: var(--c-accent, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.lfd-btn-ghost {
+  background: transparent; border: 1px solid var(--c-border-2, #d1d5db);
+  color: var(--c-text-2); padding: 8px 14px; border-radius: var(--radius-sm, 6px);
+  font-size: 13px; font-family: inherit; cursor: pointer;
+}
+.lfd-btn-ghost:hover { background: var(--c-bg-2, #f3f4f6); }
+
+
+@media (max-width: 900px) {
+  .lfd-app { padding: 16px; }
+  .lfd-hero { grid-template-columns: 1fr; }
+  .lfd-stats { grid-template-columns: repeat(2, 1fr); }
+  .lfd-rb-list { grid-template-columns: 1fr; }
+}

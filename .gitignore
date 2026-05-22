@@ -1,0 +1,10 @@
+# backend/.gitignore
+node_modules/
+.env
+*.json.key
+dist/
+
+# frontend/.gitignore
+node_modules/
+.env
+dist/
