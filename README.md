@@ -1,6 +1,6 @@
 # Loan Fraud Detection
 
-AI-powered document verification system for loan applications. Combines **Claude Vision** (OCR + forgery reasoning) with **deterministic forensic checks** (Aadhaar QR signature, EXIF metadata, PAN structure, cross-document consistency) to give loan officers evidence-backed fraud verdicts on Aadhaar, PAN, ITR, and employment letters.
+AI-powered document verification system for loan applications. Combines **AI Vision** (Claude or Gemini; configured via `AI_PROVIDER`) for OCR + forgery reasoning with **deterministic forensic checks** (Aadhaar QR signature, EXIF metadata, PAN structure, cross-document consistency) to give loan officers evidence-backed fraud verdicts on Aadhaar, PAN, ITR, and employment letters.
 
 ## Architecture
 
@@ -8,7 +8,7 @@ AI-powered document verification system for loan applications. Combines **Claude
 |----------|-------|
 | Frontend | React + Vite + Socket.io client |
 | Backend  | Node.js + Express + Bull (Redis queues) + Socket.io |
-| AI       | Anthropic Claude Vision API |
+| AI       | Anthropic Claude OR Google Gemini (configurable via `AI_PROVIDER=claude\|gemini`) |
 | Forensics| `jsqr` (Aadhaar QR), `exifr` (EXIF), custom PAN validator |
 | Storage  | Google Cloud Storage (real) / `fake-gcs-server` (local) |
 | Database | YugabyteDB (PostgreSQL-compatible) via Prisma |
@@ -17,7 +17,9 @@ AI-powered document verification system for loan applications. Combines **Claude
 
 - Node.js ≥ 20
 - Docker + Docker Compose
-- An Anthropic API key — https://console.anthropic.com/
+- **One of:**
+  - An Anthropic API key — https://console.anthropic.com/ (for Claude)
+  - A Google Gemini API key — https://aistudio.google.com/app/apikey (for Gemini)
 
 ## Setup
 
@@ -58,9 +60,16 @@ curl -X POST -H "Content-Type: application/json" \
 Create `backend/.env`:
 
 ```bash
-# Anthropic
+# AI Provider — choose one:
+# Option A: Claude (Anthropic)
+AI_PROVIDER=claude
 ANTHROPIC_API_KEY=sk-ant-...
 CLAUDE_MODEL=claude-opus-4-6           # or claude-sonnet-4-5 if your key lacks Opus access
+
+# Option B: Gemini (Google) — uncomment to use instead of Claude
+# AI_PROVIDER=gemini
+# GEMINI_API_KEY=AIzaSy...
+# GEMINI_MODEL=gemini-2.5-pro           # or gemini-2.5-flash for cheaper/faster
 
 # Server
 PORT=3001

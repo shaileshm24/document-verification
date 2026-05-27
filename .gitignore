@@ -8,3 +8,7 @@ dist/
 node_modules/
 .env
 dist/
+
+_bmad/
+.augment/
+.agents/

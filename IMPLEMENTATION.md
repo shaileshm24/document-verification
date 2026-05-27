@@ -36,7 +36,7 @@ A loan officer creates a loan application, uploads 4 KYC documents (Aadhaar, PAN
                   └──────────────┘
 ```
 
-The worker runs **in-process** with the API (Bull spawns its own job loop in the same Node process). Helmet's CORP is set to `cross-origin` so the frontend can `<img>`-embed the document-streaming endpoint.
+The worker runs **in-process** with the API (Bull spawns its own job loop in the same Node process). Helmet's CORP is set to `cross-origin` so the frontend can `<img>`-embed the document-streaming endpoint. The AI provider (Claude or Gemini) is abstracted behind a dispatcher (`services/ai/index.js`) configured by the `AI_PROVIDER` env var.
 
 ## 3. End-to-end request flow
 
@@ -49,7 +49,7 @@ The worker runs **in-process** with the API (Bull spawns its own job loop in the
    - Sets `Loan.analysisStatus = QUEUED`, enqueues a single Bull `analyze` job carrying `{ loanId, documentPaths: { aadhaar: "gs://...", pan: "gs://...", ... } }`.
 4. **Bull worker picks up the job** (`documentWorker.js`):
    - Flips `analysisStatus → PROCESSING`, emits `analysis:status` (`progress: 10`).
-   - For each doc: `loadDocument(gs://...)` → Buffer + mime → run Claude extraction + EXIF in parallel; Aadhaar additionally runs the QR verifier using Claude's OCR fields as the cross-reference.
+   - For each doc: `loadDocument(gs://...)` → Buffer + mime → preprocess image (resize, normalize, sharpen) → run **AI extraction** (Claude or Gemini, via `services/ai/index.js`) + EXIF in parallel; Aadhaar additionally runs the QR verifier using the AI provider's OCR fields as the cross-reference.
    - After all 4 docs finish, runs `crossValidateDocuments()` → list of `{check, pass, detail}`.
    - Runs `calculateRiskScore()` → `{score, riskLevel, recommendation, factors}`.
    - Persists `DocumentAnalysis` row, updates `Loan` (`currentRiskScore`, `recommendation`, `analysisStatus = COMPLETED`).
@@ -118,7 +118,23 @@ The "Raw Analysis" drawer at the bottom of the dashboard prints the entire `{ana
 - `FraudFlag` — generated for high-severity findings.
 - `LoanDecision` — upserted on `POST /decision`.
 
-## 9. What's intentionally not built (yet)
+## 9. AI provider abstraction
+
+The extraction logic is decoupled from the AI provider via `backend/src/services/ai/`:
+
+- **`index.js`** — dispatcher. Reads `AI_PROVIDER` env var, validates keys at startup, routes `extractDocument(buffer, mimeType, docType)` to the appropriate provider.
+- **`prompts.js`** — shared extraction prompts for all document types. Model-agnostic: both Claude and Gemini use the same prompt text.
+- **`claude.js`** — Claude (Anthropic) implementation. Uses `@anthropic-ai/sdk`, `buildClaudeContent()` for image/PDF message blocks, strips Markdown fences from the response.
+- **`gemini.js`** — Gemini (Google) implementation. Uses `@google/generative-ai`, `buildGeminiParts()` with `inlineData`, leverages native `responseMimeType: 'application/json'` for JSON output (more reliable than Claude's prompt-based JSON).
+
+**Switching providers** is as simple as changing `AI_PROVIDER=claude|gemini` and providing the appropriate API key (`ANTHROPIC_API_KEY` or `GEMINI_API_KEY`). The rest of the pipeline (forensic verifiers, risk scoring, cross-checks) is provider-agnostic.
+
+**Adding a new provider** (e.g., OpenAI GPT-4V) requires:
+1. Create `backend/src/services/ai/openai.js` with the same `extractDocument(buffer, mimeType, docType)` signature.
+2. Add a case in `index.js` dispatcher.
+3. Add the env var `OPENAI_API_KEY` to `.env`.
+
+## 10. What's intentionally not built (yet)
 
 - Officer auth — `x-officer-id` header only.
 - PDF report export / email notifications.
@@ -126,9 +142,10 @@ The "Raw Analysis" drawer at the bottom of the dashboard prints the entire `{ana
 - Real Aadhaar UIDAI signature verification (we decode the QR payload and cross-check fields, but don't validate the digital signature against UIDAI's public key).
 - Multi-tenant separation.
 
-## 10. Quick mental model when debugging
+## 11. Quick mental model when debugging
 
 - **Stuck in QUEUED** → Redis or the Bull worker isn't up. Check `docker compose ps redis` and the API server logs for `Bull queue workers initialized`.
-- **Document UNREADABLE** → Claude call failed (look for the worker stderr) or GCS object missing. Usually visible in the per-doc card's error text.
+- **Document UNREADABLE** → AI extraction call failed (check the worker stderr for which provider errored) or GCS object missing. Usually visible in the per-doc card's error text. Tip: on Gemini free tier, check rate limits; on Claude, check credit balance.
 - **Thumbnail broken-image** → CORP / cache. Hard-refresh; confirm `Cross-Origin-Resource-Policy: cross-origin` on the `/file` response.
 - **Risk score doesn't update live** → Socket.io room mismatch. The frontend joins `loan:<loanId>`; the worker emits to the same room. Watch the browser console for `subscribed to loan:<id>` and the server logs for the matching emit.
+- **AI Provider validation failed on startup** → Missing or invalid `AI_PROVIDER` env var, or missing the API key for the chosen provider. Check `backend/.env` and the startup logs.

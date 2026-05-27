@@ -1,155 +1,15 @@
 // backend/src/services/documentAnalysisService.js
-// Core AI service — uses Claude Vision to extract and verify loan documents,
+// Core analysis service — uses AI provider (Claude or Gemini) to extract and verify loan documents,
 // combined with deterministic forensic checks (Aadhaar QR, EXIF, PAN structure).
 
-const Anthropic = require('@anthropic-ai/sdk');
 const sharp = require('sharp');
+const aiProvider = require('./ai');
 
 const { loadDocument, isImage, isPdf } = require('./verifiers/fileLoader');
 const { verifyAadhaarQR } = require('./verifiers/aadhaarQR');
 const { analyzeExif } = require('./verifiers/exifAnalyzer');
 const { validatePANFormat, checkPANSurnameMatch, crossCheckPanAadhaar } = require('./verifiers/panValidator');
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-4-6';
-
-// ─────────────────────────────────────────────
-// DOCUMENT TYPE PROMPTS
-// Tuned for Indian banking documents
-// ─────────────────────────────────────────────
-
-const EXTRACTION_PROMPTS = {
-  aadhaar: `You are a document verification expert for Indian banking. Analyze this Aadhaar card image.
-
-Extract the following fields as JSON:
-{
-  "name": "full name as printed",
-  "dob": "DD/MM/YYYY",
-  "gender": "M/F/T",
-  "uid": "XXXX-XXXX-XXXX (last 4 visible digits or full if visible)",
-  "address": "full address",
-  "pincode": "6-digit pincode",
-  "hasQR": true/false,
-  "hasPhoto": true/false
-}
-
-Then analyze for forgery indicators:
-{
-  "forgeryFlags": [
-    "FONT_INCONSISTENCY" - if text fonts don't match UIDAI standard,
-    "QR_SUSPICIOUS" - if QR code appears modified,
-    "PHOTO_MANIPULATION" - if photo shows signs of editing,
-    "ALIGNMENT_ISSUES" - if text is misaligned,
-    "COLOR_INCONSISTENCY" - if colors don't match standard Aadhaar palette,
-    "PIXELATION_AROUND_TEXT" - if text has unusual pixelation suggesting copy-paste,
-    "METADATA_MISMATCH" - if document metadata seems inconsistent
-  ],
-  "authenticityScore": 0.0-1.0,
-  "confidence": 0.0-1.0,
-  "notes": "detailed observations about authenticity"
-}
-
-Return ONLY valid JSON with both "extracted" and "analysis" keys.`,
-
-  pan: `You are a document verification expert for Indian banking. Analyze this PAN (Permanent Account Number) card.
-
-Extract:
-{
-  "pan": "AAAAA9999A — 10-character PAN exactly as printed",
-  "name": "cardholder name as printed (line above DOB)",
-  "fatherName": "father's name as printed (if visible)",
-  "dob": "DD/MM/YYYY",
-  "hasPhoto": true/false,
-  "hasSignature": true/false,
-  "hasHologram": true/false
-}
-
-Forgery analysis:
-{
-  "forgeryFlags": [
-    "INCORRECT_PAN_FORMAT" - if PAN is not 10 chars AAAAA9999A,
-    "MISSING_HOLOGRAM" - if the IT department hologram is missing or altered,
-    "FONT_INCONSISTENCY" - if fonts don't match standard PAN card,
-    "PHOTO_MANIPULATION" - if photo shows signs of editing,
-    "ALIGNMENT_ISSUES" - if text is misaligned,
-    "BACKGROUND_TAMPERING" - if background pattern looks irregular
-  ],
-  "authenticityScore": 0.0-1.0,
-  "confidence": 0.0-1.0,
-  "notes": "detailed observations"
-}
-
-Return ONLY valid JSON with "extracted" and "analysis" keys.`,
-
-  itr: `You are a financial document expert for Indian banking compliance. Analyze this Income Tax Return (ITR) document.
-
-Extract:
-{
-  "assessmentYear": "AYXXXX-XX",
-  "pan": "XXXXXXXXXX",
-  "name": "taxpayer name",
-  "annualIncome": number (in INR),
-  "taxPaid": number,
-  "filingDate": "DD/MM/YYYY",
-  "form": "ITR-1/2/3/4",
-  "acknowledgementNo": "string"
-}
-
-Forgery analysis:
-{
-  "forgeryFlags": [
-    "INCORRECT_PAN_FORMAT",
-    "INCOME_SUSPICIOUSLY_ROUND",
-    "MISSING_ACKNOWLEDGEMENT",
-    "FONT_MISMATCH",
-    "INCORRECT_ASSESSMENT_YEAR",
-    "COMPUTATION_ERROR"
-  ],
-  "authenticityScore": 0.0-1.0,
-  "confidence": 0.0-1.0,
-  "notes": "any observations"
-}
-
-Return ONLY valid JSON with "extracted" and "analysis" keys.`,
-
-  employmentLetter: `You are an HR document verification expert. Analyze this employment letter/salary certificate.
-
-Extract:
-{
-  "employerName": "company name",
-  "employerAddress": "address",
-  "gstNumber": "if visible",
-  "cinNumber": "if visible",
-  "employeeName": "employee full name",
-  "designation": "job title",
-  "monthlySalary": number (in INR),
-  "annualCtc": number,
-  "joiningDate": "DD/MM/YYYY",
-  "issueDate": "DD/MM/YYYY",
-  "hrSignatory": "signing authority name/designation",
-  "hasCompanyStamp": true/false,
-  "hasLetterhead": true/false
-}
-
-Forgery analysis:
-{
-  "forgeryFlags": [
-    "GENERIC_TEMPLATE" - matches known forged letter templates,
-    "INVALID_GST_FORMAT",
-    "NO_COMPANY_STAMP",
-    "SALARY_INCONSISTENT_WITH_DESIGNATION",
-    "MISSING_LETTERHEAD",
-    "SUSPICIOUS_FONT",
-    "NO_HR_CONTACT",
-    "ROUND_SALARY_FIGURES"
-  ],
-  "authenticityScore": 0.0-1.0,
-  "confidence": 0.0-1.0,
-  "notes": "observations"
-}
-
-Return ONLY valid JSON with "extracted" and "analysis" keys.`
-};
+const { detectDocumentTampering } = require('./tamperingDetector');
 
 // ─────────────────────────────────────────────
 // IMAGE PRE-PROCESSING — Improves OCR accuracy 15-30%
@@ -166,54 +26,22 @@ async function preprocessImageBuffer(imageBuffer) {
   return processed.toString('base64');
 }
 
-// Build the Anthropic content block for a document — images use the image source,
-// PDFs use the document source (sharp cannot process PDFs).
-async function buildDocumentContent(buffer, mimeType) {
-  if (isPdf(mimeType)) {
-    return {
-      type: 'document',
-      source: { type: 'base64', media_type: 'application/pdf', data: buffer.toString('base64') }
-    };
-  }
-  if (isImage(mimeType)) {
-    const base64 = await preprocessImageBuffer(buffer);
-    return {
-      type: 'image',
-      source: { type: 'base64', media_type: 'image/jpeg', data: base64 }
-    };
-  }
-  throw new Error(`Unsupported mime type for analysis: ${mimeType}`);
-}
-
 // ─────────────────────────────────────────────
 // SINGLE DOCUMENT ANALYSIS
+// Uses configured AI provider (Claude or Gemini)
 // ─────────────────────────────────────────────
 
 async function analyzeDocument({ buffer, mimeType }, documentType) {
-  const prompt = EXTRACTION_PROMPTS[documentType];
-  if (!prompt) throw new Error(`Unknown document type: ${documentType}`);
-
-  const docContent = await buildDocumentContent(buffer, mimeType);
-
-  const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 1500,
-    messages: [{
-      role: 'user',
-      content: [docContent, { type: 'text', text: prompt }]
-    }]
-  });
-
-  const text = response.content[0].text;
-  const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
-  try {
-    return JSON.parse(jsonStr);
-  } catch (e) {
-    console.error('JSON parse failed for document analysis:', e.message);
-    console.error('Raw response:', text);
-    throw new Error(`Failed to parse AI response for ${documentType}`);
+  // Preprocess images for better OCR accuracy
+  let bufferToAnalyze = buffer;
+  if (isImage(mimeType)) {
+    const base64Preprocessed = await preprocessImageBuffer(buffer);
+    // Convert base64 back to Buffer for the AI provider
+    bufferToAnalyze = Buffer.from(base64Preprocessed, 'base64');
   }
+
+  // Delegate to configured AI provider (Claude or Gemini)
+  return aiProvider.extractDocument(bufferToAnalyze, mimeType, documentType);
 }
 
 // ─────────────────────────────────────────────
@@ -381,30 +209,40 @@ function calculateRiskScore(documentResults, crossChecks) {
     const penaltyPoints = weights[type] * (1 - authenticity);
     score += penaltyPoints;
 
-    const flagCount = doc.analysis.forgeryFlags?.length || 0;
+    // Only count high-severity forgery flags. NO_EXIF_METADATA is benign (common in re-saves/screenshots).
+    const allFlags = doc.analysis.forgeryFlags || [];
+    const benignFlags = ['NO_EXIF_METADATA', 'METADATA_MISMATCH'];
+    const severeFlags = allFlags.filter(f => !benignFlags.includes(f));
+    const flagCount = severeFlags.length;
     score += flagCount * 3;
 
-    // EXIF tampering signals layered on top of Claude's visual assessment
-    const exifFlagCount = doc.exifAnalysis?.flags?.length || 0;
-    const exifPenalty = exifFlagCount * 4;
+    // EXIF tampering signals layered on top of AI's visual assessment
+    // NO_EXIF_METADATA itself is benign; penalize only specific edit signatures like PHOTOSHOP, GIMP, etc.
+    const exifAllFlags = doc.exifAnalysis?.flags || [];
+    const exifBenignFlags = ['NO_EXIF_METADATA'];
+    const exifSevereFlags = exifAllFlags.filter(f => !exifBenignFlags.includes(f));
+    const exifPenalty = exifSevereFlags.length * 4;
     score += exifPenalty;
 
     factors.push({
       source: type,
       authenticityScore: authenticity,
-      flags: doc.analysis.forgeryFlags || [],
-      exifFlags: doc.exifAnalysis?.flags || [],
+      flags: allFlags,
+      exifFlags: exifAllFlags,
+      severeFlags: severeFlags,
+      exifSevereFlags: exifSevereFlags,
       contribution: Math.round(penaltyPoints + flagCount * 3 + exifPenalty)
     });
   });
 
   // Aadhaar QR forensic verification — high-confidence tampering signal
+  // NOTE: QR_PRESENT and QR_MATCHES_PRINT are already handled in cross-checks above,
+  // so we only penalize the specific case of QR data mismatch here (when QR exists but doesn't match OCR)
   const qr = documentResults.aadhaar?.qrVerification;
   if (qr) {
-    if (!qr.qrFound) {
-      score += 25;
-      factors.push({ source: 'aadhaarQR', check: 'QR_NOT_FOUND', penalty: 25 });
-    } else if (qr.crossCheck.mismatches.length > 0) {
+    if (qr.qrFound && qr.crossCheck.mismatches.length > 0) {
+      // Only penalize if QR was found but its data doesn't match the printed/OCR fields
+      // (This is a separate issue from "QR missing" which is already in cross-checks)
       score += 30;
       factors.push({
         source: 'aadhaarQR',
@@ -457,15 +295,15 @@ async function analyzeAllDocuments(loanId, documentPaths) {
 
   console.log(`Starting analysis for loan ${loanId}...`);
 
-  // For each submitted document: download → Claude extraction + forensic checks in parallel
+  // For each submitted document: download → AI extraction + forensic checks in parallel
   const analysisPromises = Object.entries(documentPaths).map(async ([type, source]) => {
     try {
       console.log(`  [${type}] Loading from ${source}`);
       const loaded = await loadDocument(source);
 
-      // Claude extraction
-      const claudePromise = analyzeDocument(loaded, type).catch(err => {
-        console.error(`  [${type}] Claude analysis failed:`, err.message);
+      // AI extraction (Claude or Gemini, configured via AI_PROVIDER env)
+      const aiPromise = analyzeDocument(loaded, type).catch(err => {
+        console.error(`  [${type}] AI analysis failed:`, err.message);
         return { error: err.message };
       });
 
@@ -474,7 +312,7 @@ async function analyzeAllDocuments(loanId, documentPaths) {
         ? analyzeExif(loaded.buffer).catch(err => ({ flags: ['EXIF_PARSE_FAILED'], error: err.message }))
         : Promise.resolve(null);
 
-      const [aiResult, exifResult] = await Promise.all([claudePromise, exifPromise]);
+      const [aiResult, exifResult] = await Promise.all([aiPromise, exifPromise]);
 
       // Aadhaar-specific: QR forensic verification (uses OCR output from Claude)
       let qrResult = null;
@@ -487,11 +325,28 @@ async function analyzeAllDocuments(loanId, documentPaths) {
         }
       }
 
+      // NEW: 10-Point Tampering Detection (Hackathon MVP)
+      let tamperingAnalysis = null;
+      if (isImage(loaded.mimeType)) {
+        try {
+          tamperingAnalysis = await detectDocumentTampering(loaded.buffer, type, aiResult || {});
+        } catch (err) {
+          console.error(`  [${type}] Tampering detection failed:`, err.message);
+          tamperingAnalysis = {
+            finalTamperingScore: 0,
+            decision: 'ERROR',
+            error: err.message,
+            detectorBreakdown: []
+          };
+        }
+      }
+
       results[type] = {
         ...aiResult,
         mimeType: loaded.mimeType,
         ...(exifResult !== null && { exifAnalysis: exifResult }),
-        ...(qrResult !== null && { qrVerification: qrResult })
+        ...(qrResult !== null && { qrVerification: qrResult }),
+        ...(tamperingAnalysis !== null && { tamperingAnalysis: tamperingAnalysis })
       };
     } catch (err) {
       console.error(`  [${type}] Fatal error:`, err.message);
@@ -505,12 +360,16 @@ async function analyzeAllDocuments(loanId, documentPaths) {
   const riskAssessment = calculateRiskScore(results, crossChecks);
   const processingTimeMs = Date.now() - startTime;
 
+  // NEW: Aggregate tampering scores across all documents
+  const tamperingAggregation = aggregateTamperingScores(results);
+
   return {
     loanId,
     processingTimeMs,
     documents: results,
     crossChecks,
     riskAssessment,
+    tamperingAggregation,
     analyzedAt: new Date().toISOString()
   };
 }
@@ -566,9 +425,50 @@ function formatInr(amount) {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(amount);
 }
 
+// ─────────────────────────────────────────────
+// NEW: Aggregate Tampering Scores Across All Documents
+// ─────────────────────────────────────────────
+function aggregateTamperingScores(results) {
+  const tamperingResults = {};
+  let totalScore = 0;
+  let documentCount = 0;
+
+  for (const [type, result] of Object.entries(results)) {
+    if (result.tamperingAnalysis) {
+      tamperingResults[type] = result.tamperingAnalysis;
+      totalScore += result.tamperingAnalysis.finalTamperingScore || 0;
+      documentCount++;
+    }
+  }
+
+  const averageScore = documentCount > 0 ? totalScore / documentCount : 0;
+  let overallDecision = 'GENUINE';
+  let overallRisk = 'LOW';
+
+  if (averageScore >= 70) {
+    overallDecision = 'LIKELY_FORGED';
+    overallRisk = 'CRITICAL';
+  } else if (averageScore >= 30) {
+    overallDecision = 'SUSPICIOUS';
+    overallRisk = 'MEDIUM';
+  }
+
+  return {
+    averageTamperingScore: Math.round(averageScore * 10) / 10,
+    overallDecision,
+    overallRisk,
+    documentResults: tamperingResults,
+    documentCount,
+    recommendation: overallDecision === 'GENUINE' ? 'APPROVE' :
+                   overallDecision === 'SUSPICIOUS' ? 'MANUAL_REVIEW' :
+                   'REJECT'
+  };
+}
+
 module.exports = {
   analyzeAllDocuments,
   analyzeDocument,
   crossValidateDocuments,
-  calculateRiskScore
+  calculateRiskScore,
+  aggregateTamperingScores
 };

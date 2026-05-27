@@ -8,26 +8,93 @@ const sharp = require('sharp');
 const jsQR = require('jsqr');
 const zlib = require('zlib');
 
-// Try to render the image at a few sizes — small QRs in busy backgrounds are
-// easier to decode after upscaling.
-const SCAN_WIDTHS = [1600, 2400, 1200, 3200];
+// Try to render the image at multiple sizes and with preprocessing — small QRs
+// in busy backgrounds are easier to decode after upscaling; some QRs need
+// contrast enhancement or inversion to be detectable.
+const SCAN_WIDTHS = [1600, 2400, 1200, 3200, 4800];
 
 async function decodeQRFromImage(imageBuffer) {
+  console.log('🔍 [QR Detection] Starting QR decode from image buffer...');
+
+  // Strategy 1: Try multiple widths with inversion
   for (const width of SCAN_WIDTHS) {
     try {
+      console.log(`  📐 Strategy 1: Trying width ${width}px with inversion...`);
       const { data, info } = await sharp(imageBuffer)
         .resize(width, null, { fit: 'inside', withoutEnlargement: false })
         .ensureAlpha()
         .raw()
         .toBuffer({ resolveWithObject: true });
 
+      console.log(`    ✓ Image resized to ${info.width}x${info.height}`);
+
       const result = jsQR(new Uint8ClampedArray(data), info.width, info.height, {
         inversionAttempts: 'attemptBoth'
       });
 
-      if (result?.data) return result;
-    } catch (_) { /* try next size */ }
+      if (result?.data) {
+        console.log(`    ✅ QR FOUND at width ${width}! Data length: ${result.data.length}`);
+        return result;
+      }
+      console.log(`    ✗ No QR found at width ${width}`);
+    } catch (err) {
+      console.log(`    ✗ Error at width ${width}: ${err.message}`);
+    }
   }
+
+  // Strategy 2: Try with enhanced contrast on smaller region (QR usually in corner/side)
+  try {
+    console.log(`  📐 Strategy 2: Trying 2400px with contrast enhancement & sharpening...`);
+    const { data, info } = await sharp(imageBuffer)
+      .resize(2400, null, { fit: 'inside', withoutEnlargement: false })
+      .normalise() // Enhance contrast
+      .sharpen({ sigma: 2 }) // Emphasize edges
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    console.log(`    ✓ Image processed to ${info.width}x${info.height}`);
+
+    const result = jsQR(new Uint8ClampedArray(data), info.width, info.height, {
+      inversionAttempts: 'attemptBoth'
+    });
+
+    if (result?.data) {
+      console.log(`    ✅ QR FOUND with contrast enhancement! Data length: ${result.data.length}`);
+      return result;
+    }
+    console.log(`    ✗ No QR found even with contrast enhancement`);
+  } catch (err) {
+    console.log(`    ✗ Error in Strategy 2: ${err.message}`);
+  }
+
+  // Strategy 3: Try larger widths (for small/low-res originals)
+  for (const width of [6400, 8000]) {
+    try {
+      console.log(`  📐 Strategy 3: Trying larger width ${width}px...`);
+      const { data, info } = await sharp(imageBuffer)
+        .resize(width, null, { fit: 'inside', withoutEnlargement: true }) // No upscale beyond original
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      console.log(`    ✓ Image processed to ${info.width}x${info.height}`);
+
+      const result = jsQR(new Uint8ClampedArray(data), info.width, info.height, {
+        inversionAttempts: 'attemptBoth'
+      });
+
+      if (result?.data) {
+        console.log(`    ✅ QR FOUND at width ${width}! Data length: ${result.data.length}`);
+        return result;
+      }
+      console.log(`    ✗ No QR found at width ${width}`);
+    } catch (err) {
+      console.log(`    ✗ Error at width ${width}: ${err.message}`);
+    }
+  }
+
+  console.log('❌ [QR Detection] No QR code found after all strategies');
   return null;
 }
 
@@ -142,36 +209,74 @@ function compareFields(qrData, ocrData) {
 
 // Main entry: returns a structured verification report for an Aadhaar image.
 async function verifyAadhaarQR(imageBuffer, ocrExtracted = {}) {
+  console.log('📋 [QR Verification] Starting Aadhaar QR verification...');
   const flags = [];
   const qrResult = await decodeQRFromImage(imageBuffer);
 
   if (!qrResult) {
     flags.push('QR_NOT_FOUND');
+    console.log('⚠️  [QR Verification] QR not found - marking as NOT_FOUND');
     return {
       qrFound: false, qrType: null, extracted: null,
       crossCheck: { checks: [], mismatches: [] },
       flags,
+      flagDetails: [
+        {
+          flag: 'QR_NOT_FOUND',
+          label: 'No QR code detected',
+          severity: 'CRITICAL',
+          explanation: 'Genuine Aadhaar cards always carry a UIDAI-signed QR code. Its absence indicates the document may be counterfeit or tampered.'
+        }
+      ],
       summary: 'No QR code detected on the Aadhaar — genuine Aadhaars always carry a UIDAI QR.'
     };
   }
 
+  console.log('✅ [QR Verification] QR found, parsing payload...');
   const parsed = parseAadhaarQRPayload(qrResult.data);
-  if (!parsed.extracted) flags.push('QR_UNPARSEABLE');
+  if (!parsed.extracted) {
+    flags.push('QR_UNPARSEABLE');
+    console.log('⚠️  [QR Verification] QR payload could not be parsed');
+  }
 
   const crossCheck = parsed.extracted ? compareFields(parsed.extracted, ocrExtracted) : { checks: [], mismatches: [] };
-  if (crossCheck.mismatches.length > 0) flags.push('QR_OCR_MISMATCH');
+  if (crossCheck.mismatches.length > 0) {
+    flags.push('QR_OCR_MISMATCH');
+    console.log(`⚠️  [QR Verification] Mismatches found: ${crossCheck.mismatches.join(', ')}`);
+  }
 
-  return {
+  // Build detailed flag explanations
+  const flagDetails = flags.map(f => {
+    const explanations = {
+      'QR_UNPARSEABLE': {
+        label: 'QR payload unparseable',
+        severity: 'HIGH',
+        explanation: 'The QR code was detected but its data could not be parsed. This may indicate a corrupted or non-standard UIDAI QR format.'
+      },
+      'QR_OCR_MISMATCH': {
+        label: 'QR data mismatches OCR text',
+        severity: 'HIGH',
+        explanation: `The QR code contains different data than the printed text. Mismatches: ${crossCheck.mismatches.join(', ')}`
+      }
+    };
+    return { flag: f, ...(explanations[f] || { label: f, severity: 'MEDIUM', explanation: 'Unknown QR issue' }) };
+  });
+
+  const result = {
     qrFound: true,
     qrType: parsed.qrType,
     extracted: parsed.extracted,
     signaturePresent: parsed.signaturePresent || false,
     crossCheck,
     flags,
+    flagDetails,
     summary: flags.length === 0
       ? `QR decoded (${parsed.qrType}); printed fields match QR data.`
       : `QR issues: ${flags.join(', ')}${crossCheck.mismatches.length ? ` — mismatched: ${crossCheck.mismatches.join(', ')}` : ''}`
   };
+
+  console.log(`✅ [QR Verification] Complete. Flags: ${flags.join(', ') || 'NONE'}`);
+  return result;
 }
 
 module.exports = { verifyAadhaarQR, parseAadhaarQRPayload, decodeQRFromImage };

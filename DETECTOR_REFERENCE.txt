@@ -1,0 +1,162 @@
+COMPLETE DETECTOR REFERENCE - 10 DETECTORS
+
+FILE: backend/src/services/tamperingDetector.js
+TOTAL LINES: 604
+
+═══════════════════════════════════════════════════════════
+
+DETECTOR 1: EXIF Metadata Analysis (8% weight)
+LINE: 32-63
+FUNCTION: detectTamperingFromEXIF(imageBuffer)
+DEPENDENCY: exifr
+CHECKS:
+  ✓ Missing EXIF metadata (re-saved/screenshot)
+  ✓ Photoshop editing
+  ✓ GIMP/Lightroom editing
+  ✓ JPEG recompression
+SIGNALS: NO_EXIF_METADATA, EDITED_IN_PHOTOSHOP, EDITED_IN_IMAGE_EDITOR, RECOMPRESSED_JPEG
+
+═══════════════════════════════════════════════════════════
+
+DETECTOR 2: Image Quality Metrics (10% weight)
+LINE: 68-103
+FUNCTION: detectTamperingFromQuality(imageBuffer)
+DEPENDENCY: sharp
+CHECKS:
+  ✓ JPEG compression levels
+  ✓ Unusual aspect ratios
+  ✓ PNG transparency (splice indicator)
+SIGNALS: HIGH_COMPRESSION, UNUSUAL_ASPECT_RATIO, PNG_WITH_TRANSPARENCY
+
+═══════════════════════════════════════════════════════════
+
+DETECTOR 3: Claude AI Forensics (25% weight)
+LINE: 108-159
+FUNCTION: detectTamperingWithClaudeForensics(imageBuffer, documentType)
+DEPENDENCY: aiProvider (Claude Vision)
+CHECKS:
+  ✓ Text anomalies (fonts, sizes, alignment)
+  ✓ Photo anomalies (quality, lighting)
+  ✓ Physical signs (erasure, overwriting)
+  ✓ Printing issues (misalignment, bleeding)
+  ✓ Security features (watermarks, holograms)
+  ✓ Overall consistency
+SIGNALS: Claude AI findings
+
+═══════════════════════════════════════════════════════════
+
+DETECTOR 4: Semantic Consistency (9% weight)
+LINE: 164-206
+FUNCTION: detectFromSemanticConsistency(documentAnalysis)
+DEPENDENCY: None (logic-based)
+CHECKS:
+  ✓ Name matching (OCR vs QR)
+  ✓ DOB logic (before issue date?)
+  ✓ Document expiry status
+SIGNALS: NAME_MISMATCH_OCR_vs_QR, IMPOSSIBLE_DOB_BEFORE_ISSUE, DOCUMENT_EXPIRED
+
+═══════════════════════════════════════════════════════════
+
+DETECTOR 5: Watermark Detection (10% weight)
+LINE: 211-240
+FUNCTION: detectMissingWatermarks(imageBuffer, documentType)
+DEPENDENCY: None
+CHECKS:
+  ✓ Aadhaar: QR presence + watermark
+  ✓ PAN: Number pattern
+  ✓ ITR: Government stamp
+  ✓ Employment: Company letterhead
+SIGNALS: POSSIBLE_LOW_QUALITY_SCAN
+
+═══════════════════════════════════════════════════════════
+
+DETECTOR 6: Font Anomalies (12% weight) [NEW]
+LINE: 245-287
+FUNCTION: detectFontAnomalies(imageBuffer, documentType)
+DEPENDENCY: tesseract.js (NEW)
+CHECKS:
+  ✓ OCR-based font variety (> 5 fonts = suspicious)
+  ✓ OCR confidence levels (< 60 = anomaly)
+SIGNALS: EXCESSIVE_FONT_VARIETY, FONT_RECOGNITION_ISSUES
+
+═══════════════════════════════════════════════════════════
+
+DETECTOR 7: Compression Artifacts (11% weight) [NEW]
+LINE: 289-343
+FUNCTION: detectCompressionArtifacts(imageBuffer)
+DEPENDENCY: sharp (extended)
+CHECKS:
+  ✓ JPEG bytes-per-pixel ratio
+  ✓ Over/under compression detection
+  ✓ Progressive vs baseline JPEG
+  ✓ Re-compression cycles
+SIGNALS: EXCESSIVE_JPEG_COMPRESSION, UNUSUAL_COMPRESSION_RATIO, PROGRESSIVE_JPEG_ENCODING, POTENTIAL_RECOMPRESSION
+
+═══════════════════════════════════════════════════════════
+
+DETECTOR 8: Perceptual Hash (7% weight) [NEW]
+LINE: 345-379
+FUNCTION: detectPerceptualHash(imageBuffer)
+DEPENDENCY: sharp-phash (NEW)
+CHECKS:
+  ✓ Image fingerprinting
+  ✓ Matches against known forgery templates
+  ✓ Hash similarity detection
+SIGNALS: MATCHES_KNOWN_FORGERY, SIMILAR_TO_KNOWN_FORGERY
+
+═══════════════════════════════════════════════════════════
+
+DETECTOR 9: Frequency Domain Analysis (8% weight) [NEW]
+LINE: 381-436
+FUNCTION: detectFrequencyDomain(imageBuffer)
+DEPENDENCY: fft-js (NEW)
+CHECKS:
+  ✓ FFT frequency pattern analysis
+  ✓ Abnormal high/low frequency patterns
+  ✓ Periodic pattern detection (watermarks)
+SIGNALS: ABNORMAL_HIGH_FREQUENCY, ABNORMAL_LOW_FREQUENCY, STRONG_PERIODIC_PATTERN
+
+═══════════════════════════════════════════════════════════
+
+DETECTOR 10: Metadata Watermark (0% weight) [NEW]
+LINE: 438-518
+FUNCTION: detectMetadataWatermark(imageBuffer)
+DEPENDENCY: exifr
+CHECKS:
+  ✓ Critical EXIF field presence
+  ✓ Non-standard metadata tags (steganography)
+  ✓ Suspicious copyright fields
+SIGNALS: CRITICAL_METADATA_MISSING, EXCESSIVE_NON_STANDARD_METADATA, SUSPICIOUS_COPYRIGHT_FIELD
+
+═══════════════════════════════════════════════════════════
+
+ORCHESTRATION: detectDocumentTampering()
+LINE: 521-601
+EXECUTION: Promise.allSettled() - All 10 run in PARALLEL
+AGGREGATION: Weighted score calculation
+OUTPUT: { finalTamperingScore, decision, confidence, recommendation, detectorBreakdown }
+
+═══════════════════════════════════════════════════════════
+
+WEIGHTS SUMMARY:
+✓ EXIF: 0.08
+✓ Quality: 0.10
+✓ Claude: 0.25 (highest weight - most reliable)
+✓ Semantic: 0.09
+✓ Watermark: 0.10
+✓ Font: 0.12
+✓ Compression: 0.11
+✓ Hash: 0.07
+✓ Frequency: 0.08
+✓ Metadata: 0.00 (informational)
+TOTAL: 1.00 (100%)
+
+═══════════════════════════════════════════════════════════
+
+NEW DEPENDENCIES:
+1. tesseract.js: ^5.0.4 - OCR for font analysis
+2. sharp-phash: ^0.2.1 - Perceptual hashing
+3. fft-js: ^0.0.13 - Fast Fourier Transform
+
+INSTALLATION: npm install
+STATUS: ✅ ALL 10 DETECTORS LIVE AND ACTIVE

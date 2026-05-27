@@ -72,6 +72,66 @@ const FIELD_LABELS = {
   employeeName: 'Employee', employeeId: 'Employee ID',
 };
 
+// Aggregate all flags from all sources (AI, QR, EXIF, Semantic, Watermark)
+function aggregateAllFlags(aiFlags, exifAnalysis, qrVerification) {
+  const allFlags = [];
+
+  // 1. Add AI-detected flags from Claude
+  (aiFlags || []).forEach(f => {
+    allFlags.push({
+      flag: f,
+      source: 'AI Forensics',
+      severity: 'HIGH',
+      explanation: FLAG_LABELS[f] || `AI detected: ${f}`
+    });
+  });
+
+  // 2. Add EXIF flags
+  if (exifAnalysis?.flags) {
+    exifAnalysis.flags.forEach(f => {
+      // Skip the generic "NO_EXIF_METADATA" unless it's the only flag
+      if (f === 'NO_EXIF_METADATA') {
+        if (!exifAnalysis.flags.some(x => x !== 'NO_EXIF_METADATA')) {
+          allFlags.push({
+            flag: f,
+            source: 'EXIF Analysis',
+            severity: 'MEDIUM',
+            explanation: FLAG_LABELS[f] || 'No EXIF metadata found - document may be re-saved'
+          });
+        }
+      } else {
+        allFlags.push({
+          flag: f,
+          source: 'EXIF Analysis',
+          severity: 'HIGH',
+          explanation: FLAG_LABELS[f] || `EXIF issue: ${f}`
+        });
+      }
+    });
+  }
+
+  // 3. Add QR verification flags
+  if (qrVerification?.flags) {
+    qrVerification.flags.forEach(f => {
+      const detail = qrVerification.flagDetails?.find(d => d.flag === f);
+      allFlags.push({
+        flag: f,
+        source: 'QR Verification',
+        severity: f === 'QR_NOT_FOUND' ? 'CRITICAL' : 'HIGH',
+        explanation: detail?.explanation || FLAG_LABELS[f] || `QR issue: ${f}`
+      });
+    });
+  }
+
+  // Deduplicate by flag code
+  const seen = new Set();
+  return allFlags.filter(f => {
+    if (seen.has(f.flag)) return false;
+    seen.add(f.flag);
+    return true;
+  });
+}
+
 // Convert any unmapped camelCase key (e.g. "fatherName") into a readable label
 // so newly-added OCR fields show up gracefully without code changes.
 function humanizeKey(key) {
@@ -133,6 +193,9 @@ export function DocumentInsightCard({ docType, result, document }) {
   const flags    = analysis.forgeryFlags || [];
   const authPct  = Math.round((analysis.authenticityScore ?? 1) * 100);
 
+  // Aggregate ALL flags from all sources for unified display
+  const allFlags = aggregateAllFlags(flags, exifAnalysis, qrVerification);
+
   return (
     <div className={`lfd-doc ${status}`}>
       <div className="lfd-doc-head">
@@ -193,17 +256,25 @@ export function DocumentInsightCard({ docType, result, document }) {
           </details>
         )}
 
-        {/* Claude forgery flags */}
-        {flags.length > 0 && (
+        {/* COMPREHENSIVE FLAGS SECTION - All flags from all sources */}
+        {allFlags.length > 0 && (
           <div className="lfd-section">
-            <div className="lfd-section-title">AI-detected Issues ({flags.length})</div>
+            <div className="lfd-section-title">🚨 All Detected Issues ({allFlags.length} flag{allFlags.length === 1 ? '' : 's'})</div>
+            <div style={{ marginBottom: 12, padding: 8, background: 'rgba(255,152,0,0.05)', borderLeft: '3px solid var(--c-warn)', fontSize: 12, color: 'var(--c-text-2)' }}>
+              <strong>Summary:</strong> {allFlags.filter(f => f.severity === 'CRITICAL').length > 0 ? '⚠️ Critical issues found' : 'Warnings detected - review below'}
+            </div>
             <div className="lfd-flag-list">
-              {flags.map((f, i) => (
-                <div key={i} className="lfd-flag">
-                  <span>⚠</span>
+              {allFlags.map((f, i) => (
+                <div key={i} className={`lfd-flag ${f.severity === 'CRITICAL' ? '' : ''}`} style={{
+                  borderLeft: f.severity === 'CRITICAL' ? '3px solid #d32f2f' : f.severity === 'HIGH' ? '3px solid #f57c00' : '3px solid #fbc02d'
+                }}>
+                  <span>{f.severity === 'CRITICAL' ? '🔴' : f.severity === 'HIGH' ? '🟠' : '🟡'}</span>
                   <div style={{ flex: 1 }}>
-                    <div>{FLAG_LABELS[f] || f}</div>
-                    <div className="code">{f}</div>
+                    <div><strong>{FLAG_LABELS[f.flag] || f.flag}</strong></div>
+                    <div style={{ fontSize: 11, color: 'var(--c-text-3)', marginTop: 2 }}>
+                      {f.explanation || 'See details above'}
+                    </div>
+                    <div className="code">{f.flag} • {f.source}</div>
                   </div>
                 </div>
               ))}
@@ -294,9 +365,25 @@ function QRBlock({ qr }) {
     return (
       <>
         <span className="lfd-pill fail">QR Not Found</span>
-        <div className="lfd-note" style={{ marginTop: 8 }}>
-          Genuine Aadhaar cards always carry a UIDAI-signed QR code. Its absence is a strong tampering signal.
+        <div className="lfd-note" style={{ marginTop: 8, padding: 8, background: 'rgba(211,47,47,0.05)', borderLeft: '3px solid #d32f2f' }}>
+          <strong style={{ color: '#d32f2f' }}>⚠️ CRITICAL ISSUE:</strong> Genuine Aadhaar cards always carry a UIDAI-signed QR code. Its absence is a strong tampering signal.
         </div>
+        {qr.flagDetails && qr.flagDetails.length > 0 && (
+          <div className="lfd-flag-list" style={{ marginTop: 12 }}>
+            {qr.flagDetails.map((detail, i) => (
+              <div key={i} className="lfd-flag" style={{ borderLeft: '3px solid #d32f2f' }}>
+                <span>🔴</span>
+                <div style={{ flex: 1 }}>
+                  <div><strong>{FLAG_LABELS[detail.flag] || detail.label}</strong></div>
+                  <div style={{ fontSize: 11, color: 'var(--c-text-3)', marginTop: 4 }}>
+                    {detail.explanation}
+                  </div>
+                  <div className="code">{detail.flag}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </>
     );
   }

@@ -14,6 +14,7 @@ const fraudRoutes = require('./routes/fraud');
 const statsRoutes = require('./routes/stats');
 const { errorHandler } = require('./middleware/errorHandler');
 const { setupWorkers } = require('./workers/documentWorker');
+const aiProvider = require('./services/ai');
 
 const app = express();
 const server = http.createServer(app);
@@ -62,6 +63,14 @@ io.on('connection', (socket) => {
     console.log(`Officer disconnected: ${socket.id}`);
   });
 });
+
+// Validate and initialize AI provider
+try {
+  aiProvider.validateProvider();
+} catch (error) {
+  console.error(`❌ AI Provider initialization failed: ${error.message}`);
+  process.exit(1);
+}
 
 // Start Bull queue workers
 setupWorkers(io);
