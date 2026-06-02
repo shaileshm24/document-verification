@@ -2,7 +2,15 @@
 // 10-Point Tampering Detection System for Document Verification
 // Each detector analyzes different aspects of document authenticity
 
-const sharp = require('sharp');
+// Node v24 compatibility: Use sharp if available, fallback to null
+let sharp;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  sharp = null;
+  console.warn('⚠️  sharp not available - image processing detectors will be skipped');
+}
+
 const exifr = require('exifr');
 const aiProvider = require('./ai');
 
@@ -68,6 +76,10 @@ async function detectTamperingFromEXIF(imageBuffer) {
 // ============================================
 async function detectTamperingFromQuality(imageBuffer) {
   try {
+    if (!sharp) {
+      return { score: 0, signals: ['SHARP_UNAVAILABLE'], detector: 'Image Quality' };
+    }
+
     const image = sharp(imageBuffer);
     const metadata = await image.metadata();
     let score = 0;
@@ -245,7 +257,13 @@ async function detectMissingWatermarks(imageBuffer, documentType) {
 // ============================================
 async function detectFontAnomalies(imageBuffer, documentType) {
   try {
-    const Tesseract = require('tesseract.js');
+    let Tesseract;
+    try {
+      Tesseract = require('tesseract.js');
+    } catch (e) {
+      return { score: 0, signals: ['TESSERACT_UNAVAILABLE'], detector: 'Font Anomalies' };
+    }
+
     let score = 0;
     const signals = [];
 
@@ -291,6 +309,10 @@ async function detectFontAnomalies(imageBuffer, documentType) {
 // ============================================
 async function detectCompressionArtifacts(imageBuffer) {
   try {
+    if (!sharp) {
+      return { score: 0, signals: ['SHARP_UNAVAILABLE'], detector: 'Compression Artifacts' };
+    }
+
     const image = sharp(imageBuffer);
     const metadata = await image.metadata();
     let score = 0;
@@ -342,7 +364,13 @@ async function detectCompressionArtifacts(imageBuffer) {
 // ============================================
 async function detectPerceptualHash(imageBuffer) {
   try {
-    const pHash = require('sharp-phash');
+    let pHash;
+    try {
+      pHash = require('sharp-phash');
+    } catch (e) {
+      return { score: 0, signals: ['PHASH_UNAVAILABLE'], detector: 'Perceptual Hash' };
+    }
+
     let score = 0;
     const signals = [];
 
@@ -396,7 +424,18 @@ function calculateHashSimilarity(hash1, hash2) {
 // ============================================
 async function detectFrequencyDomain(imageBuffer) {
   try {
-    const FFT = require('fft-js').FFT;
+    if (!sharp) {
+      return { score: 0, signals: ['SHARP_UNAVAILABLE'], detector: 'Frequency Domain' };
+    }
+
+    let FFT;
+    try {
+      FFT = require('fft-js').FFT;
+    } catch (e) {
+      // FFT not available, skip frequency analysis
+      return { score: 0, signals: ['FFT_UNAVAILABLE'], detector: 'Frequency Domain' };
+    }
+
     const image = sharp(imageBuffer);
     const metadata = await image.metadata();
     const raw = await image.grayscale().raw().toBuffer();

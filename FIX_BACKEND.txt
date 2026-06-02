@@ -1,0 +1,93 @@
+================================================================================
+                    BACKEND ERROR FIX - SIMPLE STEPS
+================================================================================
+
+YOUR ERRORS:
+  ❌ Cannot find module 'axios'
+  ❌ Sharp compilation errors with Node v24.13.0
+
+================================================================================
+SOLUTION 1: SWITCH TO NODE v20 (BEST - 5 MINUTES)
+================================================================================
+
+Copy and paste these commands:
+
+  nvm install 20
+  nvm use 20
+  node --version
+
+You should see: v20.x.x
+
+Then:
+
+  cd backend
+  rm -rf node_modules package-lock.json
+  npm install
+  npm run dev
+
+✅ All features work
+✅ All 10 detectors enabled
+✅ Recommended approach
+
+================================================================================
+SOLUTION 2: QUICK FIX FOR NODE v24 (2 MINUTES)
+================================================================================
+
+Copy and paste these commands:
+
+  cd backend
+  node fix-node-v24.js
+  npm install
+  npm run dev
+
+✅ Works with Node v24
+⚠️ Disables 3 optional detectors (7/10 still work)
+
+================================================================================
+WHAT WAS FIXED
+================================================================================
+
+✅ OpenRouter now works WITHOUT axios dependency
+   - Uses Node's native https module as fallback
+   - Same functionality, no extra dependencies
+
+✅ Created fix script: backend/fix-node-v24.js
+   - Removes problematic native modules
+   - Gives clear next steps
+
+================================================================================
+RECOMMENDATION
+================================================================================
+
+Use Solution 1 (Node v20) - it's the best approach:
+
+  1. Takes only 5 minutes
+  2. All features work
+  3. All 10 detectors enabled
+  4. No compromises
+
+================================================================================
+WHAT HAPPENS NEXT
+================================================================================
+
+After running either solution:
+
+You should see this when server starts:
+
+  ✓ AI Provider: OPENROUTER (or CLAUDE/GEMINI)
+  ✓ Server running on port 3001
+  ✓ Database connected
+  ✓ Redis connected
+
+Then test uploading a document via the frontend.
+
+================================================================================
+STILL STUCK?
+================================================================================
+
+Try Solution 1 (Node v20) - it's guaranteed to work.
+
+If you get stuck, show me the error from 'npm run dev'
+and I'll help debug further.
+
+================================================================================

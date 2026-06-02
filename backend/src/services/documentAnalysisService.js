@@ -2,7 +2,15 @@
 // Core analysis service — uses AI provider (Claude or Gemini) to extract and verify loan documents,
 // combined with deterministic forensic checks (Aadhaar QR, EXIF, PAN structure).
 
-const sharp = require('sharp');
+// Node v24 compatibility: Use sharp if available, fallback to null
+let sharp;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  sharp = null;
+  console.warn('⚠️  sharp not available - image preprocessing will be skipped');
+}
+
 const aiProvider = require('./ai');
 
 const { loadDocument, isImage, isPdf } = require('./verifiers/fileLoader');
@@ -17,6 +25,12 @@ const { detectDocumentTampering } = require('./tamperingDetector');
 // ─────────────────────────────────────────────
 
 async function preprocessImageBuffer(imageBuffer) {
+  if (!sharp) {
+    // If sharp is not available, return base64 of original buffer
+    console.warn('⚠️  Sharp unavailable - skipping image preprocessing');
+    return imageBuffer.toString('base64');
+  }
+
   const processed = await sharp(imageBuffer)
     .resize(2048, null, { withoutEnlargement: false, fit: 'inside' })
     .normalize()

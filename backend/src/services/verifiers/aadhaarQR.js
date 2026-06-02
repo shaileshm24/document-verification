@@ -4,7 +4,15 @@
 // whose contents match the printed text — most amateur Photoshop forgeries
 // alter the printed text but cannot regenerate a matching QR code.
 
-const sharp = require('sharp');
+// Node v24 compatibility: Use sharp if available, fallback to null
+let sharp;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  sharp = null;
+  console.warn('⚠️  sharp not available - QR code detection will be limited');
+}
+
 const jsQR = require('jsqr');
 const zlib = require('zlib');
 
@@ -15,6 +23,11 @@ const SCAN_WIDTHS = [1600, 2400, 1200, 3200, 4800];
 
 async function decodeQRFromImage(imageBuffer) {
   console.log('🔍 [QR Detection] Starting QR decode from image buffer...');
+
+  if (!sharp) {
+    console.warn('⚠️  [QR Detection] Sharp unavailable - QR detection will be limited');
+    return null;
+  }
 
   // Strategy 1: Try multiple widths with inversion
   for (const width of SCAN_WIDTHS) {

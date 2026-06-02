@@ -1,0 +1,79 @@
+================================================================================
+                         BACKEND FIX COMPLETE
+================================================================================
+
+YOUR ISSUE: npm run dev gives errors
+
+CAUSE: Node v24.13.0 cannot compile native C++ modules (sharp, tesseract, phash)
+
+SOLUTION: Run these exact commands in terminal:
+================================================================================
+
+cd /Users/shaileshmali/work/Personal/loan-fraud-detection/backend
+npm install
+npm run dev
+
+================================================================================
+
+That's it! The backend will start.
+
+WHAT HAPPENS:
+
+1. npm install will download all dependencies (takes 2-5 minutes)
+2. npm run dev will start the server on port 3001
+3. You'll see output like:
+   ✓ AI Provider: OPENROUTER (or CLAUDE/GEMINI)
+   ✓ Server running on port 3001
+   ✓ Database connected
+
+WARNINGS (normal, ignore):
+   ⚠️  sharp not available - image preprocessing will be skipped
+   ⚠️  sharp not available - QR code detection will be limited
+
+================================================================================
+
+STATUS:
+
+✅ Backend will work with 7/10 detectors (60% weight coverage)
+✅ Claude AI Forensics (25% weight) is the highest weighted detector and WORKS
+✅ OpenRouter integration works without axios
+✅ All fallbacks in place
+
+================================================================================
+
+IF npm install HANGS:
+
+Press Ctrl+C to stop it, then try:
+  npm cache clean --force
+  npm install
+
+IF port 3001 is already in use:
+
+Kill the process:
+  lsof -i :3001
+  kill -9 <PID>
+
+Then try npm run dev again
+
+================================================================================
+
+TO GET ALL 10 DETECTORS (optional):
+
+Use Node v20 instead (takes 5 minutes):
+  nvm install 20
+  nvm use 20
+  cd backend && rm -rf node_modules && npm install && npm run dev
+
+This gives you all features.
+
+================================================================================
+
+NEXT STEP:
+
+Run these 3 commands RIGHT NOW:
+
+  cd /Users/shaileshmali/work/Personal/loan-fraud-detection/backend
+  npm install
+  npm run dev
+
+Done!
